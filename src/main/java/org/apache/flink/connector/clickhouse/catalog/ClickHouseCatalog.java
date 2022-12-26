@@ -353,41 +353,36 @@ public class ClickHouseCatalog extends AbstractCatalog {
             return Collections.emptyList();
         }
 
-        try (PreparedStatement stmt =
-                     connection.prepareStatement(
-                             String.format(
-                                     "SELECT name from `system`.columns where `database` = '%s' and `table` = '%s' and is_in_primary_key = 1",
-                                     databaseName,
-                                     tableName));
-             ResultSet rs = stmt.executeQuery()) {
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "SELECT name from `system`.`columns` where `database` = ? and `table` = ? and is_in_primary_key = 1")) {
+            stmt.setString(1, databaseName);
+            stmt.setString(2, tableName);
             List<String> primaryKeys = new ArrayList<>();
-            while (rs.next()) {
-                primaryKeys.add(rs.getString(1));
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    primaryKeys.add(rs.getString(1));
+                }
             }
-
             return primaryKeys;
         } catch (Exception e) {
             throw new CatalogException(
                     String.format(
                             "Failed getting primary keys in catalog %s database %s table %s",
-                            getName(), databaseName, tableName),
-                    e);
+                            getName(), databaseName, tableName), e);
         }
     }
 
     private List<String> getPartitionKeys(String databaseName, String tableName) {
-        try (PreparedStatement stmt =
-                     connection.prepareStatement(
-                             String.format(
-                                     "SELECT name from `system`.columns where `database` = '%s' and `table` = '%s' and is_in_partition_key = 1",
-                                     databaseName,
-                                     tableName));
-             ResultSet rs = stmt.executeQuery()) {
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "SELECT name from `system`.`columns` where `database` = ? and `table` = ? and is_in_partition_key = 1")) {
+            stmt.setString(1, databaseName);
+            stmt.setString(2, tableName);
             List<String> partitionKeys = new ArrayList<>();
-            while (rs.next()) {
-                partitionKeys.add(rs.getString(1));
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    partitionKeys.add(rs.getString(1));
+                }
             }
-
             return partitionKeys;
         } catch (Exception e) {
             throw new CatalogException(
