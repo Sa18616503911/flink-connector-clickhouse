@@ -165,8 +165,8 @@ public class ClickHouseCatalog extends AbstractCatalog {
     public synchronized List<String> listDatabases() throws CatalogException {
         // Sometimes we need to look up database `system`, so we won't get rid of it.
         try (PreparedStatement stmt =
-                        connection.prepareStatement("SELECT name from `system`.databases");
-                ResultSet rs = stmt.executeQuery()) {
+                     connection.prepareStatement("SELECT name from `system`.databases");
+             ResultSet rs = stmt.executeQuery()) {
             List<String> databases = new ArrayList<>();
 
             while (rs.next()) {
@@ -223,33 +223,49 @@ public class ClickHouseCatalog extends AbstractCatalog {
         if (!databaseExists(databaseName)) {
             throw new DatabaseNotExistException(getName(), databaseName);
         }
-
-        try (PreparedStatement stmt =
-                        connection.prepareStatement(
-                                String.format(
-                                        "SELECT name from `system`.tables where database = '%s'",
-                                        databaseName));
-                ResultSet rs = stmt.executeQuery()) {
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "SELECT name from `system`.`tables` where database = ?")) {
+            stmt.setString(1, databaseName);
             List<String> tables = new ArrayList<>();
-
-            while (rs.next()) {
-                tables.add(rs.getString(1));
+            try (ResultSet rs = stmt.executeQuery();) {
+                while (rs.next()) {
+                    tables.add(rs.getString(1));
+                }
             }
-
             return tables;
         } catch (Exception e) {
             throw new CatalogException(
                     String.format(
                             "Failed listing tables in catalog %s database %s",
-                            getName(), databaseName),
-                    e);
+                            getName(),
+                            databaseName), e);
         }
     }
 
     @Override
     public List<String> listViews(String databaseName)
             throws DatabaseNotExistException, CatalogException {
-        throw new UnsupportedOperationException();
+        if (databaseExists(databaseName)) {
+            throw new DatabaseNotExistException(getName(), databaseName);
+        }
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "SELECT name from `system`.`tables` where database = ? and engine = 'Distributed'")) {
+            stmt.setString(1, databaseName);
+            List<String> tables = new ArrayList<>();
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    tables.add(rs.getString(1));
+                }
+            }
+            return tables;
+        } catch (Exception e) {
+            throw new CatalogException(
+                    String.format(
+                            "Failed listing Views in catalog %s database %s",
+                            getName(),
+                            databaseName), e);
+        }
+
     }
 
     @Override
@@ -298,9 +314,9 @@ public class ClickHouseCatalog extends AbstractCatalog {
         // must add `limit 0` statement to avoid data transmission to the client, look at
         // `ChunkedInputStream.close()` for more info.
         try (PreparedStatement stmt =
-                connection.prepareStatement(
-                        String.format(
-                                "SELECT * from `%s`.`%s` limit 0", databaseName, tableName))) {
+                     connection.prepareStatement(
+                             String.format(
+                                     "SELECT * from `%s`.`%s` limit 0", databaseName, tableName))) {
             ClickHouseResultSetMetaData metaData =
                     stmt.getMetaData().unwrap(ClickHouseResultSetMetaData.class);
             Method getColMethod = metaData.getClass().getDeclaredMethod("getCol", int.class);
@@ -338,11 +354,12 @@ public class ClickHouseCatalog extends AbstractCatalog {
         }
 
         try (PreparedStatement stmt =
-                        connection.prepareStatement(
-                                String.format(
-                                        "SELECT name from `system`.columns where `database` = '%s' and `table` = '%s' and is_in_primary_key = 1",
-                                        databaseName, tableName));
-                ResultSet rs = stmt.executeQuery()) {
+                     connection.prepareStatement(
+                             String.format(
+                                     "SELECT name from `system`.columns where `database` = '%s' and `table` = '%s' and is_in_primary_key = 1",
+                                     databaseName,
+                                     tableName));
+             ResultSet rs = stmt.executeQuery()) {
             List<String> primaryKeys = new ArrayList<>();
             while (rs.next()) {
                 primaryKeys.add(rs.getString(1));
@@ -360,11 +377,12 @@ public class ClickHouseCatalog extends AbstractCatalog {
 
     private List<String> getPartitionKeys(String databaseName, String tableName) {
         try (PreparedStatement stmt =
-                        connection.prepareStatement(
-                                String.format(
-                                        "SELECT name from `system`.columns where `database` = '%s' and `table` = '%s' and is_in_partition_key = 1",
-                                        databaseName, tableName));
-                ResultSet rs = stmt.executeQuery()) {
+                     connection.prepareStatement(
+                             String.format(
+                                     "SELECT name from `system`.columns where `database` = '%s' and `table` = '%s' and is_in_partition_key = 1",
+                                     databaseName,
+                                     tableName));
+             ResultSet rs = stmt.executeQuery()) {
             List<String> partitionKeys = new ArrayList<>();
             while (rs.next()) {
                 partitionKeys.add(rs.getString(1));
@@ -427,7 +445,7 @@ public class ClickHouseCatalog extends AbstractCatalog {
     public List<CatalogPartitionSpec> listPartitions(
             ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
             throws TableNotExistException, TableNotPartitionedException,
-                    PartitionSpecInvalidException, CatalogException {
+            PartitionSpecInvalidException, CatalogException {
         return Collections.emptyList();
     }
 
@@ -457,8 +475,8 @@ public class ClickHouseCatalog extends AbstractCatalog {
             CatalogPartition partition,
             boolean ignoreIfExists)
             throws TableNotExistException, TableNotPartitionedException,
-                    PartitionSpecInvalidException, PartitionAlreadyExistsException,
-                    CatalogException {
+            PartitionSpecInvalidException, PartitionAlreadyExistsException,
+            CatalogException {
         throw new UnsupportedOperationException();
     }
 
