@@ -456,6 +456,8 @@ public class ClickHouseCatalog extends AbstractCatalog {
         return Collections.emptyList();
     }
 
+
+
     @Override
     public List<CatalogPartitionSpec> listPartitionsByFilter(
             ObjectPath tablePath,
