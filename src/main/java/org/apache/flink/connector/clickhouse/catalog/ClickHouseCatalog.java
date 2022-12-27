@@ -38,6 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.yandex.clickhouse.BalancedClickhouseDataSource;
 import ru.yandex.clickhouse.ClickHouseConnection;
+import ru.yandex.clickhouse.ClickHouseStatement;
 import ru.yandex.clickhouse.response.ClickHouseColumnInfo;
 import ru.yandex.clickhouse.response.ClickHouseResultSetMetaData;
 import ru.yandex.clickhouse.settings.ClickHouseQueryParam;
@@ -47,9 +48,11 @@ import javax.annotation.Nullable;
 import java.lang.reflect.Method;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -111,18 +114,21 @@ public class ClickHouseCatalog extends AbstractCatalog {
         super(catalogName, defaultDatabase == null ? DEFAULT_DATABASE : defaultDatabase);
 
         checkArgument(
-                !StringUtils.isNullOrWhitespaceOnly(baseUrl), "baseUrl cannot be null or empty");
+                !StringUtils.isNullOrWhitespaceOnly(baseUrl),
+                "baseUrl cannot be null or empty");
         checkArgument(
-                !StringUtils.isNullOrWhitespaceOnly(username), "username cannot be null or empty");
+                !StringUtils.isNullOrWhitespaceOnly(username),
+                "username cannot be null or empty");
         checkArgument(
-                !StringUtils.isNullOrWhitespaceOnly(password), "password cannot be null or empty");
+                !StringUtils.isNullOrWhitespaceOnly(password),
+                "password cannot be null or empty");
 
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
         this.username = username;
         this.password = password;
         this.ignorePrimaryKey =
-                properties.get(CATALOG_IGNORE_PRIMARY_KEY) == null
-                        || Boolean.parseBoolean(properties.get(CATALOG_IGNORE_PRIMARY_KEY));
+                properties.get(CATALOG_IGNORE_PRIMARY_KEY) == null || Boolean.parseBoolean(
+                        properties.get(CATALOG_IGNORE_PRIMARY_KEY));
         this.properties = Collections.unmodifiableMap(properties);
     }
 
@@ -134,8 +140,9 @@ public class ClickHouseCatalog extends AbstractCatalog {
             configuration.setProperty(ClickHouseQueryParam.USER.getKey(), username);
             configuration.setProperty(ClickHouseQueryParam.PASSWORD.getKey(), password);
             String jdbcUrl = ClickHouseUtil.getJdbcUrl(baseUrl, getDefaultDatabase());
-            BalancedClickhouseDataSource dataSource =
-                    new BalancedClickhouseDataSource(jdbcUrl, configuration);
+            BalancedClickhouseDataSource dataSource = new BalancedClickhouseDataSource(
+                    jdbcUrl,
+                    configuration);
             dataSource.actualize();
             connection = dataSource.getConnection();
             LOG.info("Created catalog {}, established connection to {}", getName(), jdbcUrl);
@@ -164,9 +171,8 @@ public class ClickHouseCatalog extends AbstractCatalog {
     @Override
     public synchronized List<String> listDatabases() throws CatalogException {
         // Sometimes we need to look up database `system`, so we won't get rid of it.
-        try (PreparedStatement stmt =
-                     connection.prepareStatement("SELECT name from `system`.databases");
-             ResultSet rs = stmt.executeQuery()) {
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "SELECT name from `system`.databases"); ResultSet rs = stmt.executeQuery()) {
             List<String> databases = new ArrayList<>();
 
             while (rs.next()) {
@@ -175,14 +181,14 @@ public class ClickHouseCatalog extends AbstractCatalog {
 
             return databases;
         } catch (Exception e) {
-            throw new CatalogException(
-                    String.format("Failed listing database in catalog %s", getName()), e);
+            throw new CatalogException(String.format(
+                    "Failed listing database in catalog %s",
+                    getName()), e);
         }
     }
 
     @Override
-    public CatalogDatabase getDatabase(String databaseName)
-            throws DatabaseNotExistException, CatalogException {
+    public CatalogDatabase getDatabase(String databaseName) throws DatabaseNotExistException, CatalogException {
         if (listDatabases().contains(databaseName)) {
             return new CatalogDatabaseImpl(Collections.emptyMap(), null);
         } else {
@@ -198,28 +204,33 @@ public class ClickHouseCatalog extends AbstractCatalog {
     }
 
     @Override
-    public void createDatabase(String name, CatalogDatabase database, boolean ignoreIfExists)
-            throws DatabaseAlreadyExistException, CatalogException {
+    public void createDatabase(
+            String name,
+            CatalogDatabase database,
+            boolean ignoreIfExists) throws DatabaseAlreadyExistException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void dropDatabase(String name, boolean ignoreIfNotExists, boolean cascade)
-            throws DatabaseNotEmptyException, CatalogException {
+    public void dropDatabase(
+            String name,
+            boolean ignoreIfNotExists,
+            boolean cascade) throws DatabaseNotEmptyException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void alterDatabase(String name, CatalogDatabase newDatabase, boolean ignoreIfNotExists)
-            throws DatabaseNotExistException, CatalogException {
+    public void alterDatabase(
+            String name,
+            CatalogDatabase newDatabase,
+            boolean ignoreIfNotExists) throws DatabaseNotExistException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
     // ------------- tables -------------
 
     @Override
-    public synchronized List<String> listTables(String databaseName)
-            throws DatabaseNotExistException, CatalogException {
+    public synchronized List<String> listTables(String databaseName) throws DatabaseNotExistException, CatalogException {
         if (!databaseExists(databaseName)) {
             throw new DatabaseNotExistException(getName(), databaseName);
         }
@@ -234,17 +245,15 @@ public class ClickHouseCatalog extends AbstractCatalog {
             }
             return tables;
         } catch (Exception e) {
-            throw new CatalogException(
-                    String.format(
-                            "Failed listing tables in catalog %s database %s",
-                            getName(),
-                            databaseName), e);
+            throw new CatalogException(String.format(
+                    "Failed listing tables in catalog %s database %s",
+                    getName(),
+                    databaseName), e);
         }
     }
 
     @Override
-    public List<String> listViews(String databaseName)
-            throws DatabaseNotExistException, CatalogException {
+    public List<String> listViews(String databaseName) throws DatabaseNotExistException, CatalogException {
         if (databaseExists(databaseName)) {
             throw new DatabaseNotExistException(getName(), databaseName);
         }
@@ -259,18 +268,16 @@ public class ClickHouseCatalog extends AbstractCatalog {
             }
             return tables;
         } catch (Exception e) {
-            throw new CatalogException(
-                    String.format(
-                            "Failed listing Views in catalog %s database %s",
-                            getName(),
-                            databaseName), e);
+            throw new CatalogException(String.format(
+                    "Failed listing Views in catalog %s database %s",
+                    getName(),
+                    databaseName), e);
         }
 
     }
 
     @Override
-    public CatalogBaseTable getTable(ObjectPath tablePath)
-            throws TableNotExistException, CatalogException {
+    public CatalogBaseTable getTable(ObjectPath tablePath) throws TableNotExistException, CatalogException {
         if (!tableExists(tablePath)) {
             throw new TableNotExistException(getName(), tablePath);
         }
@@ -285,19 +292,20 @@ public class ClickHouseCatalog extends AbstractCatalog {
         String databaseName = tablePath.getDatabaseName();
         String tableName = tablePath.getObjectName();
         try {
-            DistributedEngineFullSchema engineFullSchema =
-                    ClickHouseUtil.getAndParseDistributedEngineSchema(
-                            connection, tablePath.getDatabaseName(), tablePath.getObjectName());
+            DistributedEngineFullSchema engineFullSchema = ClickHouseUtil.getAndParseDistributedEngineSchema(
+                    connection,
+                    tablePath.getDatabaseName(),
+                    tablePath.getObjectName());
             if (engineFullSchema != null) {
                 databaseName = engineFullSchema.getDatabase();
                 tableName = engineFullSchema.getTable();
             }
         } catch (Exception e) {
-            throw new CatalogException(
-                    String.format(
-                            "Failed getting engine full of %s.%s.%s",
-                            getName(), databaseName, tableName),
-                    e);
+            throw new CatalogException(String.format(
+                    "Failed getting engine full of %s.%s.%s",
+                    getName(),
+                    databaseName,
+                    tableName), e);
         }
 
         return new CatalogTableImpl(
@@ -313,20 +321,22 @@ public class ClickHouseCatalog extends AbstractCatalog {
         // types? 3. All queried data will be obtained before PreparedStatement is closed, so we
         // must add `limit 0` statement to avoid data transmission to the client, look at
         // `ChunkedInputStream.close()` for more info.
-        try (PreparedStatement stmt =
-                     connection.prepareStatement(
-                             String.format(
-                                     "SELECT * from `%s`.`%s` limit 0", databaseName, tableName))) {
-            ClickHouseResultSetMetaData metaData =
-                    stmt.getMetaData().unwrap(ClickHouseResultSetMetaData.class);
+        try (PreparedStatement stmt = connection.prepareStatement(String.format(
+                "SELECT * from `%s`.`%s` limit 0",
+                databaseName,
+                tableName))) {
+            ClickHouseResultSetMetaData metaData = stmt
+                    .getMetaData()
+                    .unwrap(ClickHouseResultSetMetaData.class);
             Method getColMethod = metaData.getClass().getDeclaredMethod("getCol", int.class);
             getColMethod.setAccessible(true);
 
             List<String> primaryKeys = getPrimaryKeys(databaseName, tableName);
             TableSchema.Builder builder = TableSchema.builder();
             for (int idx = 1; idx <= metaData.getColumnCount(); idx++) {
-                ClickHouseColumnInfo columnInfo =
-                        (ClickHouseColumnInfo) getColMethod.invoke(metaData, idx);
+                ClickHouseColumnInfo columnInfo = (ClickHouseColumnInfo) getColMethod.invoke(
+                        metaData,
+                        idx);
                 String columnName = columnInfo.getColumnName();
                 DataType columnType = ClickHouseTypeUtil.toFlinkType(columnInfo);
                 if (primaryKeys.contains(columnName)) {
@@ -340,11 +350,11 @@ public class ClickHouseCatalog extends AbstractCatalog {
             }
             return builder.build();
         } catch (Exception e) {
-            throw new CatalogException(
-                    String.format(
-                            "Failed getting columns in catalog %s database %s table %s",
-                            getName(), databaseName, tableName),
-                    e);
+            throw new CatalogException(String.format(
+                    "Failed getting columns in catalog %s database %s table %s",
+                    getName(),
+                    databaseName,
+                    tableName), e);
         }
     }
 
@@ -365,10 +375,11 @@ public class ClickHouseCatalog extends AbstractCatalog {
             }
             return primaryKeys;
         } catch (Exception e) {
-            throw new CatalogException(
-                    String.format(
-                            "Failed getting primary keys in catalog %s database %s table %s",
-                            getName(), databaseName, tableName), e);
+            throw new CatalogException(String.format(
+                    "Failed getting primary keys in catalog %s database %s table %s",
+                    getName(),
+                    databaseName,
+                    tableName), e);
         }
     }
 
@@ -385,11 +396,11 @@ public class ClickHouseCatalog extends AbstractCatalog {
             }
             return partitionKeys;
         } catch (Exception e) {
-            throw new CatalogException(
-                    String.format(
-                            "Failed getting partition keys of %s.%s.%s",
-                            getName(), databaseName, tableName),
-                    e);
+            throw new CatalogException(String.format(
+                    "Failed getting partition keys of %s.%s.%s",
+                    getName(),
+                    databaseName,
+                    tableName), e);
         }
     }
 
@@ -404,62 +415,68 @@ public class ClickHouseCatalog extends AbstractCatalog {
     }
 
     @Override
-    public void dropTable(ObjectPath tablePath, boolean ignoreIfNotExists)
-            throws TableNotExistException, CatalogException {
+    public void dropTable(
+            ObjectPath tablePath,
+            boolean ignoreIfNotExists) throws TableNotExistException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void renameTable(ObjectPath tablePath, String newTableName, boolean ignoreIfNotExists)
-            throws TableNotExistException, TableAlreadyExistException, CatalogException {
+    public void renameTable(
+            ObjectPath tablePath,
+            String newTableName,
+            boolean ignoreIfNotExists) throws TableNotExistException, TableAlreadyExistException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void createTable(ObjectPath tablePath, CatalogBaseTable table, boolean ignoreIfExists)
-            throws TableAlreadyExistException, DatabaseNotExistException, CatalogException {
+    public void createTable(
+            ObjectPath tablePath,
+            CatalogBaseTable table,
+            boolean ignoreIfExists) throws TableAlreadyExistException, DatabaseNotExistException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
     @Override
     public void alterTable(
-            ObjectPath tablePath, CatalogBaseTable newTable, boolean ignoreIfNotExists)
-            throws TableNotExistException, CatalogException {
+            ObjectPath tablePath,
+            CatalogBaseTable newTable,
+            boolean ignoreIfNotExists) throws TableNotExistException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
     // ------------- partitions -------------
 
     @Override
-    public List<CatalogPartitionSpec> listPartitions(ObjectPath tablePath)
-            throws TableNotExistException, TableNotPartitionedException, CatalogException {
+    public List<CatalogPartitionSpec> listPartitions(ObjectPath tablePath) throws TableNotExistException, TableNotPartitionedException, CatalogException {
         return Collections.emptyList();
     }
 
     @Override
     public List<CatalogPartitionSpec> listPartitions(
-            ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
-            throws TableNotExistException, TableNotPartitionedException,
-            PartitionSpecInvalidException, CatalogException {
+            ObjectPath tablePath,
+            CatalogPartitionSpec partitionSpec) throws TableNotExistException, TableNotPartitionedException, PartitionSpecInvalidException, CatalogException {
         return Collections.emptyList();
     }
 
     @Override
     public List<CatalogPartitionSpec> listPartitionsByFilter(
-            ObjectPath tablePath, List<Expression> filters)
-            throws TableNotExistException, TableNotPartitionedException, CatalogException {
+            ObjectPath tablePath,
+            List<Expression> filters) throws TableNotExistException, TableNotPartitionedException, CatalogException {
         return Collections.emptyList();
     }
 
     @Override
-    public CatalogPartition getPartition(ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
-            throws PartitionNotExistException, CatalogException {
+    public CatalogPartition getPartition(
+            ObjectPath tablePath,
+            CatalogPartitionSpec partitionSpec) throws PartitionNotExistException, CatalogException {
         throw new PartitionNotExistException(getName(), tablePath, partitionSpec);
     }
 
     @Override
-    public boolean partitionExists(ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
-            throws CatalogException {
+    public boolean partitionExists(
+            ObjectPath tablePath,
+            CatalogPartitionSpec partitionSpec) throws CatalogException {
         throw new UnsupportedOperationException();
     }
 
@@ -468,17 +485,15 @@ public class ClickHouseCatalog extends AbstractCatalog {
             ObjectPath tablePath,
             CatalogPartitionSpec partitionSpec,
             CatalogPartition partition,
-            boolean ignoreIfExists)
-            throws TableNotExistException, TableNotPartitionedException,
-            PartitionSpecInvalidException, PartitionAlreadyExistsException,
-            CatalogException {
+            boolean ignoreIfExists) throws TableNotExistException, TableNotPartitionedException, PartitionSpecInvalidException, PartitionAlreadyExistsException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
     @Override
     public void dropPartition(
-            ObjectPath tablePath, CatalogPartitionSpec partitionSpec, boolean ignoreIfNotExists)
-            throws PartitionNotExistException, CatalogException {
+            ObjectPath tablePath,
+            CatalogPartitionSpec partitionSpec,
+            boolean ignoreIfNotExists) throws PartitionNotExistException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
@@ -487,82 +502,103 @@ public class ClickHouseCatalog extends AbstractCatalog {
             ObjectPath tablePath,
             CatalogPartitionSpec partitionSpec,
             CatalogPartition newPartition,
-            boolean ignoreIfNotExists)
-            throws PartitionNotExistException, CatalogException {
+            boolean ignoreIfNotExists) throws PartitionNotExistException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
     // ------------- functions -------------
 
     @Override
-    public List<String> listFunctions(String dbName)
-            throws DatabaseNotExistException, CatalogException {
-        return Collections.emptyList();
+    public List<String> listFunctions(String dbName) throws DatabaseNotExistException, CatalogException {
+        final String sql = "SELECT `name` from `system`.`functions`";
+        final List<String> functions = new LinkedList<>();
+        try (ClickHouseStatement stm = connection.createStatement();
+             ResultSet result = stm.executeQuery(sql)) {
+            while (result.next()) {
+                functions.add(result.getString(1));
+            }
+        } catch (Exception e) {
+            throw new CatalogException("Failed getting functions", e);
+        }
+        return functions;
     }
 
     @Override
-    public CatalogFunction getFunction(ObjectPath functionPath)
-            throws FunctionNotExistException, CatalogException {
-        throw new FunctionNotExistException(getName(), functionPath);
+    public CatalogFunction getFunction(ObjectPath functionPath) throws FunctionNotExistException, CatalogException {
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean functionExists(ObjectPath functionPath) throws CatalogException {
+        final String sql = "SELECT count(1) from `system`.`functions` WHERE  `name` = ?";
+        final String functionName = functionPath.getObjectName();
+        try (PreparedStatement stm = connection.prepareStatement(sql)) {
+            stm.setString(1, functionName);
+            try (ResultSet result = stm.executeQuery()) {
+                if (result.next()) {
+                    return result.getInt(1) > 0;
+                }
+            }
+        } catch (SQLException e) {
+            throw new CatalogException("Failed getting function " + functionName, e);
+        }
         return false;
     }
 
     @Override
     public void createFunction(
-            ObjectPath functionPath, CatalogFunction function, boolean ignoreIfExists)
-            throws FunctionAlreadyExistException, DatabaseNotExistException, CatalogException {
+            ObjectPath functionPath,
+            CatalogFunction function,
+            boolean ignoreIfExists) throws FunctionAlreadyExistException, DatabaseNotExistException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
     @Override
     public void alterFunction(
-            ObjectPath functionPath, CatalogFunction newFunction, boolean ignoreIfNotExists)
-            throws FunctionNotExistException, CatalogException {
+            ObjectPath functionPath,
+            CatalogFunction newFunction,
+            boolean ignoreIfNotExists) throws FunctionNotExistException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void dropFunction(ObjectPath functionPath, boolean ignoreIfNotExists)
-            throws FunctionNotExistException, CatalogException {
+    public void dropFunction(
+            ObjectPath functionPath,
+            boolean ignoreIfNotExists) throws FunctionNotExistException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
     // ------------- statistics -------------
 
     @Override
-    public CatalogTableStatistics getTableStatistics(ObjectPath tablePath)
-            throws TableNotExistException, CatalogException {
+    public CatalogTableStatistics getTableStatistics(ObjectPath tablePath) throws TableNotExistException, CatalogException {
         return CatalogTableStatistics.UNKNOWN;
     }
 
     @Override
-    public CatalogColumnStatistics getTableColumnStatistics(ObjectPath tablePath)
-            throws TableNotExistException, CatalogException {
+    public CatalogColumnStatistics getTableColumnStatistics(ObjectPath tablePath) throws TableNotExistException, CatalogException {
         return CatalogColumnStatistics.UNKNOWN;
     }
 
     @Override
     public CatalogTableStatistics getPartitionStatistics(
-            ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
-            throws PartitionNotExistException, CatalogException {
+            ObjectPath tablePath,
+            CatalogPartitionSpec partitionSpec) throws PartitionNotExistException, CatalogException {
         return CatalogTableStatistics.UNKNOWN;
     }
 
     @Override
     public CatalogColumnStatistics getPartitionColumnStatistics(
-            ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
-            throws PartitionNotExistException, CatalogException {
+            ObjectPath tablePath,
+            CatalogPartitionSpec partitionSpec) throws PartitionNotExistException, CatalogException {
         return CatalogColumnStatistics.UNKNOWN;
     }
 
     @Override
     public void alterTableStatistics(
-            ObjectPath tablePath, CatalogTableStatistics tableStatistics, boolean ignoreIfNotExists)
-            throws TableNotExistException, CatalogException {
+            ObjectPath tablePath,
+            CatalogTableStatistics tableStatistics,
+            boolean ignoreIfNotExists) throws TableNotExistException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
@@ -570,8 +606,7 @@ public class ClickHouseCatalog extends AbstractCatalog {
     public void alterTableColumnStatistics(
             ObjectPath tablePath,
             CatalogColumnStatistics columnStatistics,
-            boolean ignoreIfNotExists)
-            throws TableNotExistException, CatalogException, TablePartitionedException {
+            boolean ignoreIfNotExists) throws TableNotExistException, CatalogException, TablePartitionedException {
         throw new UnsupportedOperationException();
     }
 
@@ -580,8 +615,7 @@ public class ClickHouseCatalog extends AbstractCatalog {
             ObjectPath tablePath,
             CatalogPartitionSpec partitionSpec,
             CatalogTableStatistics partitionStatistics,
-            boolean ignoreIfNotExists)
-            throws PartitionNotExistException, CatalogException {
+            boolean ignoreIfNotExists) throws PartitionNotExistException, CatalogException {
         throw new UnsupportedOperationException();
     }
 
@@ -590,8 +624,7 @@ public class ClickHouseCatalog extends AbstractCatalog {
             ObjectPath tablePath,
             CatalogPartitionSpec partitionSpec,
             CatalogColumnStatistics columnStatistics,
-            boolean ignoreIfNotExists)
-            throws PartitionNotExistException, CatalogException {
+            boolean ignoreIfNotExists) throws PartitionNotExistException, CatalogException {
         throw new UnsupportedOperationException();
     }
 }
