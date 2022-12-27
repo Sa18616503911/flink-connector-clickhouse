@@ -1,6 +1,8 @@
 package org.apache.flink.connector.clickhouse.util;
 
 import org.apache.flink.connector.clickhouse.internal.common.DistributedEngineFullSchema;
+import org.apache.flink.connector.clickhouse.internal.common.TableFullSchema;
+import org.apache.flink.table.catalog.exceptions.CatalogException;
 
 import org.apache.http.client.utils.URIBuilder;
 import ru.yandex.clickhouse.ClickHouseConnection;
@@ -69,6 +71,55 @@ public class ClickHouseUtil {
 
         throw new SQLException(
                 String.format("table `%s`.`%s` does not exist", databaseName, tableName));
+    }
+
+    public static TableFullSchema getAndParseTableEngineSchema(
+            ClickHouseConnection connection,
+            String catalogName,
+            String databasesNamed,
+            String tableName) throws CatalogException {
+        final String sql = "SELECT engine,engine_full FROM `system`.`tables` WHERE `database` = ? AND `name` = ?";
+        try (PreparedStatement stm = connection.prepareStatement(sql)) {
+            stm.setString(1, databasesNamed);
+            stm.setString(2, tableName);
+            try (ResultSet result = stm.executeQuery()) {
+                if (result.next()) {
+                    final String engineFull = result.getString("engine_full");
+                    final String engine = result.getString("engine");
+                    final TableFullSchema schema = new TableFullSchema(
+                            engine,
+                            databasesNamed,
+                            tableName
+                    );
+                    final Matcher matcher =
+                            DISTRIBUTED_TABLE_ENGINE_PATTERN
+                                    .matcher(engineFull.replace("'", ""));
+                    if (matcher.find()) {
+                        schema.setDistributed(true);
+                        schema.setCluster(matcher.group("cluster"));
+                        schema.setDatabase(matcher.group("database"));
+                        schema.setTable(matcher.group("table"));
+                    }
+                    return schema;
+                }
+            }
+        } catch (Exception e) {
+            throw new CatalogException(
+                    String.format(
+                            "Failed getting engine full to %s.%s.%s",
+                            catalogName,
+                            databasesNamed,
+                            tableName), e
+            );
+        }
+        throw new CatalogException(
+                String.format(
+                        "table %s.%s.%s does not exist",
+                        catalogName,
+                        databasesNamed,
+                        tableName
+                )
+        );
     }
 
     public static Properties getClickHouseProperties(Map<String, String> tableOptions) {

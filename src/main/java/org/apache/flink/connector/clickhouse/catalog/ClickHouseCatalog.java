@@ -2,6 +2,7 @@ package org.apache.flink.connector.clickhouse.catalog;
 
 import org.apache.flink.connector.clickhouse.ClickHouseDynamicTableFactory;
 import org.apache.flink.connector.clickhouse.internal.common.DistributedEngineFullSchema;
+import org.apache.flink.connector.clickhouse.internal.common.TableFullSchema;
 import org.apache.flink.connector.clickhouse.util.ClickHouseTypeUtil;
 import org.apache.flink.connector.clickhouse.util.ClickHouseUtil;
 import org.apache.flink.table.api.TableSchema;
@@ -61,6 +62,8 @@ import java.util.Properties;
 import static org.apache.flink.connector.clickhouse.config.ClickHouseConfig.CATALOG_IGNORE_PRIMARY_KEY;
 import static org.apache.flink.connector.clickhouse.config.ClickHouseConfig.DATABASE_NAME;
 import static org.apache.flink.connector.clickhouse.config.ClickHouseConfig.PASSWORD;
+import static org.apache.flink.connector.clickhouse.config.ClickHouseConfig.TABLE_CLUSTER;
+import static org.apache.flink.connector.clickhouse.config.ClickHouseConfig.TABLE_ENGINE;
 import static org.apache.flink.connector.clickhouse.config.ClickHouseConfig.TABLE_NAME;
 import static org.apache.flink.connector.clickhouse.config.ClickHouseConfig.URL;
 import static org.apache.flink.connector.clickhouse.config.ClickHouseConfig.USERNAME;
@@ -289,25 +292,19 @@ public class ClickHouseCatalog extends AbstractCatalog {
         configuration.put(USERNAME, username);
         configuration.put(PASSWORD, password);
 
-        String databaseName = tablePath.getDatabaseName();
-        String tableName = tablePath.getObjectName();
-        try {
-            DistributedEngineFullSchema engineFullSchema = ClickHouseUtil.getAndParseDistributedEngineSchema(
-                    connection,
-                    tablePath.getDatabaseName(),
-                    tablePath.getObjectName());
-            if (engineFullSchema != null) {
-                databaseName = engineFullSchema.getDatabase();
-                tableName = engineFullSchema.getTable();
-            }
-        } catch (Exception e) {
-            throw new CatalogException(String.format(
-                    "Failed getting engine full of %s.%s.%s",
-                    getName(),
-                    databaseName,
-                    tableName), e);
-        }
+        TableFullSchema engineFullSchema = ClickHouseUtil.getAndParseTableEngineSchema(
+                connection,
+                getName(),
+                tablePath.getDatabaseName(),
+                tablePath.getObjectName()
+        );
 
+        String databaseName = engineFullSchema.getDatabase();
+        String tableName = engineFullSchema.getTable();
+        configuration.put(TABLE_ENGINE, engineFullSchema.getEngine());
+        if (engineFullSchema.isDistributed()) {
+            configuration.put(TABLE_CLUSTER, engineFullSchema.getCluster());
+        }
         return new CatalogTableImpl(
                 createTableSchema(databaseName, tableName),
                 getPartitionKeys(databaseName, tableName),
