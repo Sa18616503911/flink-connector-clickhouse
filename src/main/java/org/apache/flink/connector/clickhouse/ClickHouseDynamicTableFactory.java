@@ -34,6 +34,8 @@ import static org.apache.flink.connector.clickhouse.config.ClickHouseConfigOptio
 import static org.apache.flink.connector.clickhouse.config.ClickHouseConfigOptions.SINK_PARTITION_KEY;
 import static org.apache.flink.connector.clickhouse.config.ClickHouseConfigOptions.SINK_PARTITION_STRATEGY;
 import static org.apache.flink.connector.clickhouse.config.ClickHouseConfigOptions.SINK_UPDATE_STRATEGY;
+import static org.apache.flink.connector.clickhouse.config.ClickHouseConfigOptions.TABLE_CLUSTER;
+import static org.apache.flink.connector.clickhouse.config.ClickHouseConfigOptions.TABLE_ENGINE;
 import static org.apache.flink.connector.clickhouse.config.ClickHouseConfigOptions.TABLE_NAME;
 import static org.apache.flink.connector.clickhouse.config.ClickHouseConfigOptions.URL;
 import static org.apache.flink.connector.clickhouse.config.ClickHouseConfigOptions.USERNAME;
@@ -44,7 +46,8 @@ import static org.apache.flink.connector.clickhouse.util.ClickHouseUtil.getClick
 public class ClickHouseDynamicTableFactory
         implements DynamicTableSinkFactory, DynamicTableSourceFactory {
 
-    public ClickHouseDynamicTableFactory() {}
+    public ClickHouseDynamicTableFactory() {
+    }
 
     @Override
     public DynamicTableSink createDynamicTableSink(Context context) {
@@ -114,6 +117,8 @@ public class ClickHouseDynamicTableFactory
         optionalOptions.add(SCAN_PARTITION_NUM);
         optionalOptions.add(SCAN_PARTITION_LOWER_BOUND);
         optionalOptions.add(SCAN_PARTITION_UPPER_BOUND);
+        optionalOptions.add(TABLE_ENGINE);
+        optionalOptions.add(TABLE_CLUSTER);
         return optionalOptions;
     }
 

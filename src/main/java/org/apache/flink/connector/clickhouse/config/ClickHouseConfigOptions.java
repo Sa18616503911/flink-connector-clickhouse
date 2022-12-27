@@ -57,7 +57,7 @@ public class ClickHouseConfigOptions {
     public static final ConfigOption<Boolean> USE_LOCAL =
             ConfigOptions.key(ClickHouseConfig.USE_LOCAL)
                     .booleanType()
-                    .defaultValue(false)
+                    .defaultValue(true)
                     .withDescription(
                             "Directly read/write local tables in case of distributed table engine.");
 
@@ -140,6 +140,18 @@ public class ClickHouseConfigOptions {
                     .longType()
                     .noDefaultValue()
                     .withDescription("The largest value of the last partition.");
+
+    public static final ConfigOption<String> TABLE_ENGINE =
+            ConfigOptions.key(ClickHouseConfig.TABLE_ENGINE)
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("The clickhouse table engine.");
+
+    public static final ConfigOption<String> TABLE_CLUSTER =
+            ConfigOptions.key(ClickHouseConfig.TABLE_CLUSTER)
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("The clickhouse table cluster.");
 
     /** Partition strategy for sink operator. */
     public enum SinkPartitionStrategy {

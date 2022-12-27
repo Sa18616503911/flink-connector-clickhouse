@@ -15,6 +15,10 @@ public class ClickHouseConfig {
 
     public static final String DATABASE_NAME = "database-name";
 
+    public static final String TABLE_ENGINE = "table-engine";
+
+    public static final String TABLE_CLUSTER = "table-cluster";
+
     public static final String TABLE_NAME = "table-name";
 
     public static final String USE_LOCAL = "use-local";

@@ -16,7 +16,7 @@ Please create issues if you encounter bugs and any help for the project is great
 | password                   | optional | none     | String   | The ClickHouse password.                                                                                                 |
 | database-name              | optional | default  | String   | The ClickHouse database name.                                                                                            |
 | table-name                 | required | none     | String   | The ClickHouse table name.                                                                                               |
-| use-local                  | optional | false    | Boolean  | Directly read/write local tables in case of distributed table engine.                                                    |
+| use-local                  | optional | true     | Boolean  | Directly read/write local tables in case of distributed table engine.                                                    |
 | sink.batch-size            | optional | 1000     | Integer  | The max flush size, over this will flush data.                                                                           |
 | sink.flush-interval        | optional | 1s       | Duration | Over this flush interval mills, asynchronous threads will flush data.                                                    |
 | sink.max-retries           | optional | 3        | Integer  | The max retry times when writing records to the database failed.                                                         |
