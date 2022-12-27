@@ -455,8 +455,7 @@ public class ClickHouseCatalog extends AbstractCatalog {
             CatalogPartitionSpec partitionSpec) throws TableNotExistException, TableNotPartitionedException, PartitionSpecInvalidException, CatalogException {
         return Collections.emptyList();
     }
-
-
+    
 
     @Override
     public List<CatalogPartitionSpec> listPartitionsByFilter(
